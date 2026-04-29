@@ -5,7 +5,7 @@ puppeteer.use(StealthPlugin());
 const { spawn } = require('child_process');
 const { PuppeteerScreenRecorder } = require('puppeteer-screen-recorder');
 
-// 🚀 Multi-Stream Key Manager (OK.ru)
+// 🚀 Multi-Stream Key Manager
 const STREAM_KEYS = {
     '1': '14601603391083_14040893622891_puxzrwjniu', 
     '2': '14601696583275_14041072274027_apdzpdb5xi', 
@@ -22,22 +22,44 @@ const RTMP_DESTINATION = `rtmp://vsu.okcdn.ru/input/${ACTIVE_STREAM_KEY}`;
 let browser = null;
 let ffmpegProcess = null;
 
-(async () => {
-    console.log('[*] Starting Professional Broadcaster & Debugger...');
+// =========================================================================
+// 🔄 MAIN LOOP
+// =========================================================================
+async function mainLoop() {
+    while (true) {
+        try {
+            await startDirectStreaming();
+        } catch (error) {
+            console.error(`\n[!] ALERT: ${error.message}`);
+            console.log('[*] 🔄 Restarting everything in 3 seconds...');
+            await cleanup();
+            await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+    }
+}
+
+async function startDirectStreaming() {
+    console.log(`[*] Starting browser and FFmpeg...`);
     const streamQuality = process.env.STREAM_QUALITY || '110KBps (Balanced 480p)';
     
     browser = await puppeteer.launch({
         headless: false, 
         defaultViewport: { width: 1280, height: 720 },
+        ignoreDefaultArgs: ['--enable-automation'], 
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--window-size=1280,720',
+            '--kiosk', // 🔥 YEH WOH JADOO HAI JO TABS AUR URL BAR GAYAB KAREGA
             '--autoplay-policy=no-user-gesture-required'
         ]
     });
 
     const page = await browser.newPage();
+    const pages = await browser.pages();
+    for (const p of pages) {
+        if (p !== page) await p.close();
+    }
 
     // 🛑 POPUP & REDIRECT BLOCKER
     browser.on('targetcreated', async (target) => {
@@ -61,7 +83,6 @@ let ffmpegProcess = null;
     console.log('[*] 🔴 Debug Recording Started...');
     await recorder.start('./recording.mp4');
 
-    // Thora wait for player load
     await new Promise(r => setTimeout(r, 5000));
 
     // 🖱️ 2. THE TERMINATOR CLICKER
@@ -93,16 +114,33 @@ let ffmpegProcess = null;
         attempts++;
     }
 
-    // 🔊 3. AUDIO UNLOCKER & UI HIDER
+    // ⬛ 3. IMMEDIATE BLACK BACKGROUND & FULLSCREEN FORCE
+    console.log('[*] Enforcing Black Background and Full Screen UI...');
+    await page.evaluate(() => {
+        document.body.style.backgroundColor = 'black';
+        document.body.style.overflow = 'hidden';
+        document.querySelectorAll('iframe').forEach(iframe => {
+            iframe.style.position = 'fixed'; iframe.style.top = '0'; iframe.style.left = '0';
+            iframe.style.width = '100vw'; iframe.style.height = '100vh';
+            iframe.style.zIndex = '999999'; iframe.style.backgroundColor = 'black'; iframe.style.border = 'none';
+        });
+    }).catch(() => {});
+
     let targetFrame = page.frames().find(f => f.url().includes('player') || f.url().includes('embed')) || page.mainFrame();
-    console.log('[*] Unmuting video and hiding player UI...');
+    
     await targetFrame.evaluate(async () => {
         const style = document.createElement('style');
         style.innerHTML = `.jw-controls, .jw-ui, .plyr__controls, .vjs-control-bar, [data-player] .controls { display: none !important; }`;
         document.head.appendChild(style);
 
         const video = document.querySelector('video');
-        if (video) { video.muted = false; video.volume = 1.0; }
+        if (video) { 
+            video.muted = false; 
+            video.volume = 1.0; 
+            video.style.position = 'fixed'; video.style.top = '0'; video.style.left = '0';
+            video.style.width = '100vw'; video.style.height = '100vh';
+            video.style.zIndex = '2147483647'; video.style.backgroundColor = 'black'; video.style.objectFit = 'contain';
+        }
     }).catch(()=>{});
 
     // 📡 4. START FFMPEG BROADCAST
@@ -129,41 +167,70 @@ let ffmpegProcess = null;
     await recorder.stop();
     console.log('[+] 30-Sec Debug Video Saved! Safe to cancel workflow anytime now.');
 
-    // 🧠 6. THE SMART WATCHDOG (Black Background Logic)
-    console.log('\n[*] Smart Engine Connected! 24/7 Black Background Privacy & Health Check Active...');
+    // 🧠 6. THE SMART WATCHDOG (Privacy & Health Check Active...)
+    console.log('\n[*] Smart Engine Connected! 24/7 Monitoring Active...');
     while (true) {
-        if (!browser || !browser.isConnected()) break;
+        if (!browser || !browser.isConnected()) throw new Error("Browser closed.");
 
-        // Black Background & Full Screen Stretch
-        await page.evaluate(() => {
-            document.body.style.backgroundColor = 'black';
-            document.body.style.overflow = 'hidden';
-            document.querySelectorAll('iframe').forEach(iframe => {
-                iframe.style.position = 'fixed'; iframe.style.top = '0'; iframe.style.left = '0';
-                iframe.style.width = '100vw'; iframe.style.height = '100vh';
-                iframe.style.zIndex = '999999'; iframe.style.backgroundColor = 'black';
-            });
-        }).catch(() => {});
-
-        await targetFrame.evaluate(() => {
+        const status = await targetFrame.evaluate(() => {
+            const bodyText = document.body.innerText.toLowerCase();
+            if (bodyText.includes("stream error") || bodyText.includes("could not be loaded")) return 'CRITICAL_ERROR';
             const v = document.querySelector('video');
-            if (v) {
-                v.style.position = 'fixed'; v.style.top = '0'; v.style.left = '0';
-                v.style.width = '100vw'; v.style.height = '100vh';
-                v.style.zIndex = '2147483647'; v.style.backgroundColor = 'black'; v.style.objectFit = 'contain';
-            }
-        }).catch(() => {});
+            if (!v || v.ended) return 'DEAD';
+            return 'HEALTHY';
+        }).catch(() => 'EVAL_ERROR');
+
+        if (status === 'CRITICAL_ERROR' || status === 'DEAD') {
+            console.log('\n[!] ❌ STREAM DEAD DETECTED! Restarting process...');
+            throw new Error("Watchdog detected video dead."); 
+        }
 
         await new Promise(r => setTimeout(r, 5000)); 
     }
-})();
+}
+
+async function cleanup() {
+    if (ffmpegProcess) { try { ffmpegProcess.kill('SIGKILL'); } catch(e){} ffmpegProcess = null; }
+    if (browser) { try { await browser.close(); } catch(e){} browser = null; }
+}
 
 process.on('SIGINT', async () => {
-    if (ffmpegProcess) { ffmpegProcess.kill('SIGKILL'); }
-    if (browser) { await browser.close(); }
+    console.log('\n[*] Stopping live script cleanly...');
+    await cleanup();
     process.exit(0);
 });
 
+// =========================================================================
+// ⏱️ AUTO-OVERLAP TRIGGER (Runs exactly after 5h 50m)
+// =========================================================================
+setTimeout(async () => {
+    console.log("\n[*] 5h 50m completed! Triggering next action for overlap...");
+    const repo = process.env.GITHUB_REPOSITORY;
+    const token = process.env.GH_PAT;
+    const ref = process.env.GITHUB_REF_NAME || 'main';
+    
+    if (!repo || !token) return;
+
+    try {
+        await fetch(`https://api.github.com/repos/${repo}/actions/workflows/main.yml/dispatches`, {
+            method: 'POST',
+            headers: { 'Accept': 'application/vnd.github.v3+json', 'Authorization': `token ${token}` },
+            body: JSON.stringify({
+                ref: ref,
+                inputs: {
+                    target_url: process.env.TARGET_URL,
+                    okru_stream_channel: process.env.OKRU_STREAM_ID,
+                    stream_quality: process.env.STREAM_QUALITY
+                }
+            })
+        });
+        console.log("[+] Next workflow run successfully triggered!");
+    } catch (err) {
+        console.error("[-] Failed to trigger next workflow.");
+    }
+}, 21000000); 
+
+mainLoop();
 
 
 
