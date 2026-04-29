@@ -1,0 +1,15 @@
+{
+  "name": "stream-recorder",
+  "version": "1.0.0",
+  "description": "Stream auto clicker and video recorder",
+  "main": "debug-stream.js",
+  "scripts": {
+    "start": "node debug-stream.js"
+  },
+  "dependencies": {
+    "puppeteer": "^22.0.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer-screen-recorder": "^2.1.2"
+  }
+}
