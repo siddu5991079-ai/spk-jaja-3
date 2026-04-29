@@ -50,7 +50,7 @@ async function startDirectStreaming() {
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--window-size=1280,720',
-            '--kiosk', // 🔥 YEH WOH JADOO HAI JO TABS AUR URL BAR GAYAB KAREGA
+            '--kiosk', 
             '--autoplay-policy=no-user-gesture-required'
         ]
     });
@@ -114,7 +114,33 @@ async function startDirectStreaming() {
         attempts++;
     }
 
-    // ⬛ 3. IMMEDIATE BLACK BACKGROUND & FULLSCREEN FORCE
+    // 🧠 3. THE SMART SCANNER (Brought Back to Fix the DEAD issue!)
+    console.log('[*] Scanning iframes for the REAL Live Stream Video...');
+    let targetFrame = null;
+    for (const frame of page.frames()) {
+        try {
+            const isRealLiveStream = await frame.evaluate(() => {
+                const vid = document.querySelector('video');
+                // Check if video exists and is somewhat visible
+                if (!vid) return false;
+                if (vid.clientWidth < 100 || vid.clientHeight < 100) return false; 
+                return true; 
+            });
+
+            if (isRealLiveStream) {
+                targetFrame = frame;
+                console.log(`[+] Smart Scanner locked onto video frame: ${frame.url().substring(0, 50)}...`);
+                break; // Mill gaya video, aur dhoondne ki zaroorat nahi
+            }
+        } catch (e) { }
+    }
+
+    if (!targetFrame) {
+        console.log('[-] Smart Scanner could not find an iframe with video, defaulting to main page.');
+        targetFrame = page.mainFrame();
+    }
+
+    // ⬛ 4. IMMEDIATE BLACK BACKGROUND & FULLSCREEN FORCE
     console.log('[*] Enforcing Black Background and Full Screen UI...');
     await page.evaluate(() => {
         document.body.style.backgroundColor = 'black';
@@ -126,8 +152,6 @@ async function startDirectStreaming() {
         });
     }).catch(() => {});
 
-    let targetFrame = page.frames().find(f => f.url().includes('player') || f.url().includes('embed')) || page.mainFrame();
-    
     await targetFrame.evaluate(async () => {
         const style = document.createElement('style');
         style.innerHTML = `.jw-controls, .jw-ui, .plyr__controls, .vjs-control-bar, [data-player] .controls { display: none !important; }`;
@@ -143,7 +167,7 @@ async function startDirectStreaming() {
         }
     }).catch(()=>{});
 
-    // 📡 4. START FFMPEG BROADCAST
+    // 📡 5. START FFMPEG BROADCAST
     console.log(`[+] Broadcasting to OK.ru CHANNEL: ${SELECTED_CHANNEL} - Quality: ${streamQuality}`);
     const displayNum = process.env.DISPLAY || ':99';
     let ffmpegArgs = [
@@ -161,13 +185,13 @@ async function startDirectStreaming() {
         if (data.toString().includes('Error')) console.log(`[FFmpeg Error]: ${data}`);
     });
 
-    // ⏱️ 5. STOP RECORDING AFTER 30 SECONDS (To safely compile the .mp4 file)
+    // ⏱️ 6. STOP RECORDING AFTER 30 SECONDS (To safely compile the .mp4 file)
     console.log('[*] Capturing stream for 30 seconds to finalize Debug Recording...');
     await new Promise(r => setTimeout(r, 30000));
     await recorder.stop();
     console.log('[+] 30-Sec Debug Video Saved! Safe to cancel workflow anytime now.');
 
-    // 🧠 6. THE SMART WATCHDOG (Privacy & Health Check Active...)
+    // 🧠 7. THE SMART WATCHDOG (Privacy & Health Check Active...)
     console.log('\n[*] Smart Engine Connected! 24/7 Monitoring Active...');
     while (true) {
         if (!browser || !browser.isConnected()) throw new Error("Browser closed.");
