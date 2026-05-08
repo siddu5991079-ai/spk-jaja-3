@@ -8,7 +8,7 @@ const { PuppeteerScreenRecorder } = require('puppeteer-screen-recorder');
 
 // 🚀 Multi-Stream Key Manager (Ab 8 Keys ke sath)
 const STREAM_KEYS = {
-    '1': '15254238731883_15281627925099_najspfkgne', 
+    '1': '15254285524587_15281717840491_7e6qdknzsu', 
     '2': '14601696583275_14041072274027_apdzpdb5xi', 
     '3': '14617940008555_14072500914795_ohw67ls7ny',
     '4': '14601972227691_14041593547371_obdhgewlmq',
