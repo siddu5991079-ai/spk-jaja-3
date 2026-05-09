@@ -1,0 +1,63 @@
+name: 🕵️ Bulk Checker Bot
+
+on:
+  schedule:
+    - cron: '*/15 * * * *' # Har 15 minute baad jaagega
+  workflow_dispatch: 
+
+jobs:
+  check-and-trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Read Matches List & Early Trigger
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          TZ: "Asia/Karachi" 
+        run: |
+          CURRENT_TIMESTAMP=$(date +%s)
+          echo "Current Time (PKT): $(date +'%Y-%m-%d %I:%M %p')"
+
+          if [ ! -f "matches.csv" ]; then
+            echo "matches.csv file nahi mili. Koi match schedule nahi hai."
+            exit 0
+          fi
+
+          touch remaining_matches.csv
+          TRIGGERED=0
+
+          while IFS=',' read -r TARGET_TIME CHANNEL STOP_AFTER URL; do
+            TARGET_TIME=$(echo "$TARGET_TIME" | xargs)
+            CHANNEL=$(echo "$CHANNEL" | xargs)
+            STOP_AFTER=$(echo "$STOP_AFTER" | xargs)
+            URL=$(echo "$URL" | xargs)
+
+            if [ -z "$TARGET_TIME" ]; then continue; fi
+
+            TARGET_TIMESTAMP=$(date -d "$TARGET_TIME" +%s)
+            DIFF=$((TARGET_TIMESTAMP - CURRENT_TIMESTAMP))
+
+            # 👇 Agar waqt guzar gaya hai YA aglay 15 minute (900 sec) ke andar hai
+            if [[ "$DIFF" -le 900 ]]; then
+              echo "[+] Match is within 15 mins (or passed). Triggering Channel $CHANNEL instantly..."
+              gh workflow run main.yml -f target_url="$URL" -f okru_stream_channel="$CHANNEL" -f stream_quality="110KBps (Balanced 480p)" -f stop_after="$STOP_AFTER"
+              TRIGGERED=1
+            else
+              # Time abhi 15 minute se door hai, aglay check tak wait karo
+              echo "$TARGET_TIME, $CHANNEL, $STOP_AFTER, $URL" >> remaining_matches.csv
+            fi
+          done < matches.csv
+
+          mv remaining_matches.csv matches.csv
+
+          if [ "$TRIGGERED" -eq 1 ]; then
+            git config --global user.name "Stream Bot"
+            git config --global user.email "bot@example.com"
+            git add matches.csv
+            git commit -m "Bot: Triggered streams early/on-time and updated queue"
+            git push
+          fi
