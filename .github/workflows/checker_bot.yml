@@ -42,7 +42,8 @@ jobs:
             DIFF=$((TARGET_TIMESTAMP - CURRENT_TIMESTAMP))
 
             # 👇 Agar waqt guzar gaya hai YA aglay 15 minute (900 sec) ke andar hai
-            if [[ "$DIFF" -le 900 ]]; then
+            # if [[ "$DIFF" -le 900 ]]; then
+            if [[ "$DIFF" -le 3600 ]]; then
               echo "[+] Match is within 15 mins (or passed). Triggering Channel $CHANNEL instantly..."
               gh workflow run main.yml -f target_url="$URL" -f okru_stream_channel="$CHANNEL" -f stream_quality="110KBps (Balanced 480p)" -f stop_after="$STOP_AFTER"
               TRIGGERED=1
